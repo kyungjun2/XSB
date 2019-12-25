@@ -1,5 +1,4 @@
-# Server-Side Authentication Code 방식의 로그인 구현
-# Flask를 이용해 소켓 및 콜백 대응
+# Flask를 이용해 웹앱 제작
 
 # Flask 작동법 (windows, CMD)
 # 1. cd '프로젝트 폴더 경로'
