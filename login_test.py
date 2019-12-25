@@ -1,10 +1,10 @@
 # Server-Side Authentication Code 방식의 로그인 구현
 # Flask를 이용해 소켓 및 콜백 대응
 
-# Flask 작동법 (CMD)
-# 1. cd 프로젝트 폴더 경로
-# 2. set FLASK_APP=파이썬 파일 이름
-# 3. venv의 python 파일 경로\python.exe -m flask run --host=0.0.0.0 --port=12321
+# Flask 작동법 (windows, CMD)
+# 1. cd '프로젝트 폴더 경로'
+# 2. set FLASK_APP='파이썬 파일 이름'
+# 3. 'venv의 python 파일 경로'\python.exe -m flask run --host=0.0.0.0 --port=12321
 
 from flask import Flask, request, redirect, session
 
