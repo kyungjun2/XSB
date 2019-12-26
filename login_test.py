@@ -126,6 +126,48 @@ def naver_recent_articles():
     return {'return': ret}
 
 
+@app.route('/tistory_read_article', methods=['get'])
+def tistory_read_article():
+    import json
+    import requests
+
+    token = None
+    blog_name = None
+    post_id = None
+    try:
+        token = session['tistory_token']
+        blog_name = request.args.get('blogName')
+        post_id = request.args.get('postId')
+
+        if blog_name is None or post_id is None:
+            raise KeyError
+    except KeyError:
+        return "Wrong Request."
+
+    url = "https://www.tistory.com/apis/post/read"
+    param = {'access_token': token, 'blogName': blog_name, 'postId': post_id, 'output': 'json'}
+    print(requests.get(url=url, params=param).text)
+
+    j = json.loads(requests.get(url=url, params=param).text)
+    return j
+
+
+### 이 밑은 개발용임 ###
+
+
+@app.route('/')
+def list_all():
+    maps = app.url_map
+    pages = maps._rules
+    page_list = ""
+
+    for rule in pages:
+        page_list += "<a href={0}>{0}</a> | METHODS = {1} <br />".format(rule.rule, str(rule.methods))
+
+    return page_list
+
+
+
 @app.route('/check_sessions')
 def read_all_session():
     ret = ''
