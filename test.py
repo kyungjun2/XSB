@@ -8,6 +8,7 @@
 from flask import Flask, request, redirect, session
 
 import os
+
 app = Flask(__name__)
 app.secret_key = os.urandom(16)
 
@@ -146,10 +147,41 @@ def tistory_read_article():
 
     url = "https://www.tistory.com/apis/post/read"
     param = {'access_token': token, 'blogName': blog_name, 'postId': post_id, 'output': 'json'}
-    print(requests.get(url=url, params=param).text)
-
     j = json.loads(requests.get(url=url, params=param).text)
-    return j
+
+    ret = {"title": j['tistory']['item']['title'], "content": j['tistory']['item']['content'],
+           "writeDate": j['tistory']['item']['date'], "postUrl": j['tistory']['item']['postUrl']}
+    return ret
+
+
+@app.route('/naver_read_article', methods=['get'])
+def naver_read_article():
+    from bs4 import BeautifulSoup as bs
+    import requests
+
+    try:
+        blog_name = request.args.get('blogName')
+        post_id = request.args.get('postId')
+
+        if blog_name is None or post_id is None:
+            raise KeyError
+    except KeyError:
+        return "Wrong Request."
+
+    url = "https://blog.naver.com/PostView.nhn?blogId={0}&logNo={1}".format(blog_name, post_id)
+    r = requests.get(url=url)
+    soup = bs(r.text, "html.parser")
+
+    try:
+        content = str(soup.select_one("table#printPost1 div.se-main-container").prettify())
+        title = soup.select_one("table#printPost1 div.se-title-text p").text
+        writeDate = soup.select_one("table#printPost1 span.se_publishDate").text
+    except (KeyError, AttributeError):  # 옛버전 smartEditor 대응
+        title = soup.select_one("div.htitle span").text
+        writeDate = soup.select_one("p.date").text
+        content = soup.select_one("div.postViewArea")
+
+    return {'title': title, 'content': content, 'writeDate':writeDate, 'url': url}
 
 
 ### 이 밑은 개발용임 ###
@@ -165,7 +197,6 @@ def list_all():
         page_list += "<a href={0}>{0}</a> | METHODS = {1} <br />".format(rule.rule, str(rule.methods))
 
     return page_list
-
 
 
 @app.route('/check_sessions')
