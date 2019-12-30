@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+td, th {
+  border: 1px solid #dddddd;
+  text-align: left;
+  padding: 8px;
+}
+
+tr:nth-child(even) {
+  background-color: #dddddd;
+}
+</style>
+</head>
+<body>
+
+<table>
+  <tr>
+    <th>파라미터</th>
+    <th>값</th>
+  </tr>
+  {% for arg in args %}
+     <tr>
+      <td>{{ arg.name }}</td>
+      <td bgcolor={% if arg.value is none %}"#cc3333"{% else %}"#11b811"{% endif %}>{{ arg.value }}</td>
+    </tr>
+  {% endfor %}
+</table>
+
+</body>
+</html>
