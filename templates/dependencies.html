@@ -19,16 +19,20 @@ tr:nth-child(even) {
 </style>
 </head>
 <body>
-
+<h1>오류 페이지</h1>
+<hr>
+<h2>필요한 파라미터</h2>
 <table>
   <tr>
     <th>파라미터</th>
     <th>값</th>
+    <th>설명</th>
   </tr>
   {% for arg in args %}
      <tr>
       <td>{{ arg.name }}</td>
       <td bgcolor={% if arg.value is none %}"#cc3333"{% else %}"#11b811"{% endif %}>{{ arg.value }}</td>
+      <td>{{ arg.hint }}</td>
     </tr>
   {% endfor %}
 </table>
