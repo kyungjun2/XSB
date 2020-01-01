@@ -99,7 +99,7 @@ def recent_articles():
                     post['writeDate'] = child.text
             posts.append(post)
 
-        return render_template("recent_articles.html", posts=posts, blog={'type': 'naver'})
+        return render_template("recent_articles.html", posts=posts, blog={'type': 'naver', 'name': blog_name})
 
     def tistory_recent_articles():
         # 0. 파라미터 확인
@@ -126,7 +126,7 @@ def recent_articles():
             ret.append({'postLink': str(post['postUrl']), 'title': str(post['title']), 'writeDate': str(post['date']),
                         'postId': str(post['postUrl']).split('/')[-1]})
 
-        return render_template("recent_articles.html", posts=ret, blog={'type': 'tistory'})
+        return render_template("recent_articles.html", posts=ret, blog={'type': 'tistory', 'name': blog_name})
 
     target = str(request.args.get('target'))
     if target == "naver":
@@ -139,14 +139,33 @@ def recent_articles():
 
 @app.route('/selected_article', methods=['post'])
 def selected_articles():
-    ret = ""
+    posts = []
+
+    # 0.  파라미터 확인
+    target = request.form.get('target')
+    blog_name = request.form.get('blogName')
+    if target == 'naver':
+        tistory_blog_name = request.form.get('tistory-blog-name')
+
+    # 1. 선택된 글 받아오기
     for id in request.form.getlist('selection[]'):
-        ret += str(id) + "<br />"
+        posts.append(read_article(args={'target': target, 'postId': id, 'blogName': blog_name}))
+
+    # 2. 다른 플랫폼에 글 작성
+    ret = ""
+    for post in posts:
+        if target == "tistory":  # 네이버로 글 복사
+            ret += str(write_article(args={'target': 'naver', 'title': post['title'], 'content': post['content'],
+                                           'writeDate': post['writeDate']}))
+        elif target == "naver":  # 티스토리로 글 복사
+            ret += str(write_article(args={'target': 'tistory', 'title': post['title'], 'content': post['content'],
+                                           'writeDate': post['writeDate'], 'blogName': tistory_blog_name}))
+
     return ret
 
 
 @app.route('/read_article', methods=['get'])
-def read_article():
+def read_article(args=None):
     import json
     import requests
     from bs4 import BeautifulSoup as bs
@@ -157,8 +176,13 @@ def read_article():
             token = session['tistory_token']
         except KeyError:
             token = None
-        blog_name = request.args.get('blogName')
-        post_id = request.args.get('postId')
+
+        if args is None:
+            blog_name = request.args.get('blogName')
+            post_id = request.args.get('postId')
+        else:
+            blog_name = args['blogName']
+            post_id = args['postId']
 
         if token is None or blog_name is None or post_id is None:
             return render_template("dependencies.html", args=[{'name': 'token', 'value': token},
@@ -172,14 +196,19 @@ def read_article():
         j = json.loads(requests.get(url=url, params=param).text)
 
         # 2. 파싱
-        ret = {"title": j['tistory']['item']['title'], "content": j['tistory']['item']['content'],
-               "writeDate": j['tistory']['item']['date'], "postUrl": j['tistory']['item']['postUrl']}
+        ret = {'title': j['tistory']['item']['title'], 'content': j['tistory']['item']['content'],
+               'writeDate': j['tistory']['item']['date'], 'postUrl': j['tistory']['item']['postUrl']}
         return ret
 
     def naver_read_article():
         # 0. 파라미터 확인
-        blog_name = request.args.get('blogName')
-        post_id = request.args.get('postId')
+        if args is None:
+            blog_name = request.args.get('blogName')
+            post_id = request.args.get('postId')
+        else:
+            blog_name = args['blogName']
+            post_id = args['postId']
+
         if blog_name is None or post_id is None:
             return render_template("dependencies.html", args=[{'name': 'blogName', 'value': blog_name},
                                                               {'name': 'postId', 'value': post_id},
@@ -207,7 +236,11 @@ def read_article():
 
         return {'title': title, 'content': content, 'writeDate': writeDate, 'url': url}
 
-    target = str(request.args.get('target'))
+    if args is None:
+        target = str(request.args.get('target'))
+    else:
+        target = args['target']
+
     if target == "naver":
         return naver_read_article()
     elif target == "tistory":
@@ -216,8 +249,8 @@ def read_article():
         return render_template("dependencies.html", args=[{'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
 
 
-@app.route('/write_article', methods=['get'])
-def write_article():
+@app.route('/write_article', methods=['post'])
+def write_article(args=None):
     import time
     import requests
     import keys
@@ -228,10 +261,17 @@ def write_article():
             token = session['tistory_token']
         except KeyError:
             token = None
-        blog_name = request.args.get('blogName')
-        content = request.args.get('content')
-        title = request.args.get('title')
-        write_date = request.args.get('writeDate')
+
+        if args is None:
+            blog_name = request.form.get('blogName')
+            content = request.form.get('content')
+            title = request.form.get('title')
+            write_date = request.form.get('writeDate')
+        else:
+            blog_name = args['blogName']
+            content = args['content']
+            title = args['title']
+            write_date = args['writeDate']
 
         if token is None or blog_name is None or content is None or content is None or write_date is None or title is None:
             return render_template("dependencies.html", args=[{'name': 'token', 'value': token},
@@ -244,7 +284,7 @@ def write_article():
         # 1. 요청
         url = "https://www.tistory.com/apis/post/write"
         disclaimer = '''<div id="xsb-disclaimer><hr>원 글 작성일 : {0} <br /></div>"'''.format(write_date)
-        param = {'access_token': token, 'output': 'json', 'blogName': blog_name, 'title': title, 'content': content + disclaimer,
+        param = {'access_token': token, 'output': 'json', 'blogName': blog_name, 'title': title, 'content': content,
                  'visibility': '3', 'published': str(int(time.time()))}
 
         r = requests.post(url=url, params=param)
@@ -256,9 +296,14 @@ def write_article():
             token = session['naver_token']
         except KeyError:
             token = None
-        content = request.args.get('content')
-        title = request.args.get('title')
-        write_date = request.args.get('writeDate')
+        if args is None:
+            content = request.form.get('content')
+            title = request.form.get('title')
+            write_date = request.form.get('writeDate')
+        else:
+            content = args['content']
+            title = args['title']
+            write_date = args['writeDate']
 
         if token is None or content is None or content is None or write_date is None or title is None:
             return render_template("dependencies.html", args=[{'name': 'token', 'value': token},
@@ -270,16 +315,19 @@ def write_article():
         # 1. 요청
         url = "	https://openapi.naver.com/blog/writePost.json"
         disclaimer = '''<div id="xsb-disclaimer><p>원 글 작성일 : {0} <br /></p></div>"'''.format(write_date)
-        param = {'title': title, 'contents': content + disclaimer}
-        print(param)
+        param = {'title': title, 'contents': content}
 
         header = {'Authorization': "Bearer " + token, 'X-Naver-Client-Id': keys.naver_app_id,
                   'X-Naver-Client-Secret': keys.naver_secret}
 
-        r = requests.post(url=url, params=param, headers=header)
+        r = requests.post(url=url, data=param, headers=header)
         return r.text
 
-    target = str(request.args.get('target'))
+    if args is None:
+        target = str(request.args.get('target'))
+    else:
+        target = args['target']
+
     if target == "naver":
         return naver_write_article()
     elif target == "tistory":

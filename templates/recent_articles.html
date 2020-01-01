@@ -35,6 +35,10 @@
             {% endfor %}
         </table>
         <input type="hidden" value="{{ blog.type }}" name="target">
+        <input type="hidden" value="{{ blog.name }}" name="blogName">
+        {% if blog.type ==   "naver" %}
+            <input type="text" value="티스토리 블로그 아이디" name="tistory-blog-name" onfocus="this.value='';">
+        {% endif %}
         <input id="submit-button" type="submit" value="확인">
     </form>
 </body>
