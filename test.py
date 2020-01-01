@@ -94,11 +94,12 @@ def recent_articles():
                     post['title'] = child.text
                 elif child.tag == "link":
                     post['postLink'] = child.text
+                    post['postId'] = child.text.split('/')[-1]
                 elif child.tag == "pubDate":
                     post['writeDate'] = child.text
             posts.append(post)
 
-        return render_template("recent_articles.html", posts=posts)
+        return render_template("recent_articles.html", posts=posts, blog={'type': 'naver'})
 
     def tistory_recent_articles():
         # 0. 파라미터 확인
@@ -122,9 +123,10 @@ def recent_articles():
         posts = j['tistory']['item']['posts']
         ret = []
         for post in posts:
-            ret.append({'postLink': str(post['postUrl']), 'title': str(post['title']), 'writeDate': str(post['date'])})
+            ret.append({'postLink': str(post['postUrl']), 'title': str(post['title']), 'writeDate': str(post['date']),
+                        'postId': str(post['postUrl']).split('/')[-1]})
 
-        return render_template("recent_articles.html", posts=ret)
+        return render_template("recent_articles.html", posts=ret, blog={'type': 'tistory'})
 
     target = str(request.args.get('target'))
     if target == "naver":
@@ -133,6 +135,14 @@ def recent_articles():
         return tistory_recent_articles()
     else:
         return render_template("dependencies.html", args=[{'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
+
+
+@app.route('/selected_article', methods=['post'])
+def selected_articles():
+    ret = ""
+    for id in request.form.getlist('selection[]'):
+        ret += str(id) + "<br />"
+    return ret
 
 
 @app.route('/read_article', methods=['get'])

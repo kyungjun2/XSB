@@ -1,37 +1,41 @@
 <!DOCTYPE html>
 <html>
 <head>
-<style>
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
+    <style>
+    table {
+        border-collapse: collapse;
+        width: 100%;
+    }
 
-td, th {
-  border: 1px solid #dddddd;
-  text-align: left;
-  padding: 8px;
-}
+    td, th {
+        border: 1px solid #dddddd;
+        text-align: left;
+        padding: 8px;
+    }
 
-tr:nth-child(even) {
-  background-color: #dddddd;
-}
-</style>
+    tr:nth-child(even) {
+        background-color: #dddddd;
+    }
+    </style>
 </head>
 <body>
-
-<table>
-  <tr>
-    <th>제목</th>
-    <th>작성일</th>
-  </tr>
-  {% for post in posts %}
-     <tr>
-      <td><a href="{{ post.postLink }}">{{ post.title }}</a></td>
-      <td>{{ post.writeDate }}</td>
-    </tr>
-  {% endfor %}
-</table>
-
+    <form action="/selected_article" method="post">
+        <table>
+            <tr>
+                <th>제목</th>
+                <th>작성일</th>
+                <th>선택</th>
+            </tr>
+            {% for post in posts %}
+                <tr>
+                    <td><a href="{{ post.postLink }}">{{ post.title }}</a></td>
+                    <td>{{ post.writeDate }}</td>
+                    <td><input type="checkbox" name='selection[]' value="{{ post.postId }}"></td>
+                </tr>
+            {% endfor %}
+        </table>
+        <input type="hidden" value="{{ blog.type }}" name="target">
+        <input id="submit-button" type="submit" value="확인">
+    </form>
 </body>
 </html>
