@@ -1,10 +1,3 @@
-# Flask를 이용해 웹앱 제작
-
-# Flask 작동법 (windows, CMD)
-# 1. cd '프로젝트 폴더 경로'
-# 2. set FLASK_APP='파이썬 파일 이름'
-# 3. 'venv의 python 파일 경로'\python.exe -m flask run --host=0.0.0.0 --port=12321
-
 from flask import Flask, request, redirect, session, render_template
 import os
 
@@ -78,8 +71,9 @@ def recent_articles():
         # 0. 파라미터 확인
         blog_name = request.args.get('blogName')
         if blog_name is None:
-            return render_template("dependencies.html", args=[{'name': 'blogName', 'value': blog_name, 'hint': '블로그 아이디'},
-                                                              {'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
+            return render_template("dependencies.html",
+                                   args=[{'name': 'blogName', 'value': blog_name, 'hint': '블로그 아이디'},
+                                         {'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
 
         # 1. 요청
         posts = []
@@ -111,7 +105,8 @@ def recent_articles():
 
         if token is None or blog_name is None:
             return render_template("dependencies.html", args=[{'name': 'token', 'value': token, 'hint': '티스토리 로그인 필요'},
-                                                              {'name': 'blogName', 'value': blog_name, 'hint': '블로그 아이디'},
+                                                              {'name': 'blogName', 'value': blog_name,
+                                                               'hint': '블로그 아이디'},
                                                               {'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
 
         # 1. 요청
@@ -148,8 +143,8 @@ def selected_articles():
         tistory_blog_name = request.form.get('tistory-blog-name')
 
     # 1. 선택된 글 받아오기
-    for id in request.form.getlist('selection[]'):
-        posts.append(read_article(args={'target': target, 'postId': id, 'blogName': blog_name}))
+    for post_id in request.form.getlist('selection[]'):
+        posts.append(read_article(args={'target': target, 'postId': post_id, 'blogName': blog_name}))
 
     # 2. 다른 플랫폼에 글 작성
     ret = ""
@@ -169,6 +164,10 @@ def read_article(args=None):
     import json
     import requests
     from bs4 import BeautifulSoup as bs
+    import re
+    import config
+    import platform
+    from pathlib import Path
 
     def tistory_read_article():
         # 0. 파라미터 확인
@@ -196,7 +195,32 @@ def read_article(args=None):
         j = json.loads(requests.get(url=url, params=param).text)
 
         # 2. 파싱
-        ret = {'title': j['tistory']['item']['title'], 'content': j['tistory']['item']['content'],
+        # 2-1. 이미지 다운로드
+        r = re.compile("""\[##_Image\|kage@([a-zA-Z0-9/.]+).+_##\]""")
+        r2 = re.compile("""(\[##_Image\|kage@[a-zA-Z0-9/.]+.+_##\])""")
+        content = j['tistory']['item']['content']
+
+        img_urls = []
+        idx = 0
+        path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name, post_id) if platform.system() == "Windows" \
+            else "{0}/{1}/{2}/".format(target, blog_name, post_id)
+        Path(path).mkdir(parents=True, exist_ok=True)
+        for img in r.findall(content):
+            r = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
+            open(path + str(idx) + "." + img.split('.')[-1], 'wb').write(r.content)
+            idx += 1
+            img_urls.append("https://k.kakaocdn.net/dn/" + img)
+
+
+        # 2-2. 링크 교체
+        content = r2.sub("""<img src="">""", content)
+        soup = bs(content, 'html.parser')
+        idx = 0
+        for img in soup.find_all("img"):
+            img.attrs['source'] = img_urls[idx]
+            idx += 1
+
+        ret = {'title': j['tistory']['item']['title'], 'content': content,
                'writeDate': j['tistory']['item']['date'], 'postUrl': j['tistory']['item']['postUrl']}
         return ret
 
@@ -225,7 +249,7 @@ def read_article(args=None):
             title = soup.select_one("table#printPost1 div.se-title-text p").text
             writeDate = soup.select_one("table#printPost1 span.se_publishDate").text
         except (KeyError, AttributeError):
-            try:   # 옛버전 smartEditor 대응
+            try:  # 옛버전 smartEditor 대응
                 title = soup.select_one("div.htitle span").text
                 writeDate = soup.select_one("p.date").text
                 content = str(soup.select_one("div#postViewArea").prettify())
@@ -336,7 +360,6 @@ def write_article(args=None):
         return render_template("dependencies.html", args=[{'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
 
 
-
 ### 이 밑은 개발용임 ###
 
 
@@ -353,4 +376,4 @@ def list_all():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=12321, debug=True)
+    app.run(host='0.0.0.0', port=12321, debug=False)
