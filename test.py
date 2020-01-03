@@ -202,15 +202,15 @@ def read_article(args=None):
 
         img_urls = []
         idx = 0
-        path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name, post_id) if platform.system() == "Windows" \
+        path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name,
+                                                                post_id) if platform.system() == "Windows" \
             else "{0}/{1}/{2}/".format(target, blog_name, post_id)
         Path(path).mkdir(parents=True, exist_ok=True)
         for img in r.findall(content):
-            r = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
-            open(path + str(idx) + "." + img.split('.')[-1], 'wb').write(r.content)
+            req = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
+            open(path + str(idx) + "." + img.split('.')[-1], 'wb').write(req.content)
             idx += 1
             img_urls.append("https://k.kakaocdn.net/dn/" + img)
-
 
         # 2-2. 링크 교체
         content = r2.sub("""<img src="">""", content)
@@ -244,6 +244,7 @@ def read_article(args=None):
         soup = bs(r.text, "html.parser")
 
         # 2. 파싱
+        # 2-1. 글 내용 파싱
         try:  # 최신버전 smartEditor 대응
             content = str(soup.select_one("table#printPost1 div.se-main-container").prettify())
             title = soup.select_one("table#printPost1 div.se-title-text p").text
@@ -257,6 +258,22 @@ def read_article(args=None):
                 content = str(soup.select("table#printPost1 div.se_component_wrap")[1].prettify())
                 title = soup.select_one("table#printPost1 div.se_title h3").text
                 writeDate = soup.select_one("table#printPost1 span.se_publishDate").text
+
+        # 2-2. 이미지 다운로드
+        idx = 0
+        img_urls = []
+        soup = bs(content, "html.parser")
+        path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name,
+                                                                post_id) if platform.system() == "Windows" \
+            else "{0}/{1}/{2}/".format(target, blog_name, post_id)
+        Path(path).mkdir(parents=True, exist_ok=True)
+        for img in soup.find_all("img"):
+            url = img.attrs['src'] if img.attrs['src'] is not None else img.attrs['data-lazy-src']
+            url = url.split('?type')[0]
+            req = requests.get(url + ("?type=w1" if url.count("postfiles") != 0 else ""), allow_redirects=True)
+            open(path + str(idx) + "." + url.split('.')[-1], 'wb').write(req.content)
+            idx += 1
+            img_urls.append(url)
 
         return {'title': title, 'content': content, 'writeDate': writeDate, 'url': url}
 
@@ -297,7 +314,8 @@ def write_article(args=None):
             title = args['title']
             write_date = args['writeDate']
 
-        if token is None or blog_name is None or content is None or content is None or write_date is None or title is None:
+        if token is None or blog_name is None or content is None or content is None \
+                or write_date is None or title is None:
             return render_template("dependencies.html", args=[{'name': 'token', 'value': token},
                                                               {'name': 'blogName', 'value': blog_name},
                                                               {'name': 'content', 'value': content},
