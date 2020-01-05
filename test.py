@@ -150,11 +150,21 @@ def selected_articles():
     ret = ""
     for post in posts:
         if target == "tistory":  # 네이버로 글 복사
-            ret += str(write_article(args={'target': 'naver', 'title': post['title'], 'content': post['content'],
-                                           'writeDate': post['writeDate']}))
+            arg = {'target': 'naver', 'title': post['title'], 'content': post['content'],
+                   'writeDate': post['writeDate']}
+            try:
+                arg['imgPath'] = post['image_path']
+            except KeyError:
+                pass
+            ret += str(write_article(args=arg))
         elif target == "naver":  # 티스토리로 글 복사
-            ret += str(write_article(args={'target': 'tistory', 'title': post['title'], 'content': post['content'],
-                                           'writeDate': post['writeDate'], 'blogName': tistory_blog_name}))
+            arg = {'target': 'tistory', 'title': post['title'], 'content': post['content'],
+                   'writeDate': post['writeDate'], 'blogName': tistory_blog_name}
+            try:
+                arg['imgPath'] = post['image_path']
+            except KeyError:
+                pass
+            ret += str(write_article(args=arg))
 
     return ret
 
@@ -202,15 +212,23 @@ def read_article(args=None):
 
         img_urls = []
         idx = 0
+        image_data = {}
+
         path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name,
                                                                 post_id) if platform.system() == "Windows" \
             else "{0}/{1}/{2}/".format(target, blog_name, post_id)
         Path(path).mkdir(parents=True, exist_ok=True)
+
         for img in r.findall(content):
             req = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
             open(path + str(idx) + "." + img.split('.')[-1], 'wb').write(req.content)
-            idx += 1
+
             img_urls.append("https://k.kakaocdn.net/dn/" + img)
+            image_data[str(idx) + "." + url.split('.')[-1]] = req.headers['content-type']
+            img_urls.append(url)
+            idx += 1
+        with open(path + 'images.json', 'w') as file:
+            json.dump(image_data, file)
 
         # 2-2. 링크 교체
         content = r2.sub("""<img src="">""", content)
@@ -220,8 +238,11 @@ def read_article(args=None):
             img.attrs['source'] = img_urls[idx]
             idx += 1
 
+        # 3. 결과 리턴
         ret = {'title': j['tistory']['item']['title'], 'content': content,
                'writeDate': j['tistory']['item']['date'], 'postUrl': j['tistory']['item']['postUrl']}
+        if len(img_urls) != 0:
+            ret['image_path'] = path
         return ret
 
     def naver_read_article():
@@ -262,20 +283,31 @@ def read_article(args=None):
         # 2-2. 이미지 다운로드
         idx = 0
         img_urls = []
+        image_data = {}
+
         soup = bs(content, "html.parser")
         path = config.file_save_path + "{0}\\{1}\\{2}\\".format(target, blog_name,
                                                                 post_id) if platform.system() == "Windows" \
             else "{0}/{1}/{2}/".format(target, blog_name, post_id)
         Path(path).mkdir(parents=True, exist_ok=True)
+
         for img in soup.find_all("img"):
             url = img.attrs['src'] if img.attrs['src'] is not None else img.attrs['data-lazy-src']
             url = url.split('?type')[0]
             req = requests.get(url + ("?type=w1" if url.count("postfiles") != 0 else ""), allow_redirects=True)
             open(path + str(idx) + "." + url.split('.')[-1], 'wb').write(req.content)
-            idx += 1
-            img_urls.append(url)
 
-        return {'title': title, 'content': content, 'writeDate': writeDate, 'url': url}
+            image_data[str(idx) + "." + url.split('.')[-1]] = req.headers['content-type']
+            img_urls.append(url)
+            idx += 1
+        with open(path + 'images.json', 'w') as file:
+            json.dump(image_data, file)
+
+        # 3. 결과 리턴
+        ret = {'title': title, 'content': content, 'writeDate': writeDate, 'url': url}
+        if len(img_urls) != 0:
+            ret['image_path'] = path
+        return ret
 
     if args is None:
         target = str(request.args.get('target'))
@@ -295,6 +327,8 @@ def write_article(args=None):
     import time
     import requests
     import keys
+    import json
+    from bs4 import BeautifulSoup as bs
 
     def tistory_write_article():
         # 0. 파라미터 확인
@@ -308,11 +342,16 @@ def write_article(args=None):
             content = request.form.get('content')
             title = request.form.get('title')
             write_date = request.form.get('writeDate')
+            image_path = request.form.get('imgPath')
         else:
             blog_name = args['blogName']
             content = args['content']
             title = args['title']
             write_date = args['writeDate']
+            try:
+                image_path = args['imgPath']
+            except KeyError:
+                image_path = None
 
         if token is None or blog_name is None or content is None or content is None \
                 or write_date is None or title is None:
@@ -323,13 +362,39 @@ def write_article(args=None):
                                                               {'name': 'writeDate', 'value': write_date},
                                                               {'name': 'target', 'value': target, 'hint': '블로그 플랫폼'}])
 
-        # 1. 요청
+        # 1. 이미지 업로드 (있으면)
+        url = "https://www.tistory.com/apis/post/attach"
+        param = {'access_token': token, 'blogName': blog_name, 'output': 'json'}
+
+        if image_path is not None:
+            file_type = json.load(open(image_path + "images.json", 'r'))
+            image_urls = []
+
+            # 1. 이미지 업로드
+            for img in os.listdir(image_path):
+                if img == "images.json":
+                    continue
+                file = {'uploadedfile': (img, open(image_path + img, "rb"))}
+                j = json.loads(requests.post(url=url, params=param, files=file).text)
+                image_urls.append(j['tistory']['replacer'])
+
+            # 2. 이미지 링크 교체
+            soup = bs(content, "html.parser")
+            idx = 0
+
+            for tag in soup.find_all("img"):
+                tag.parent.insert(tag.parent.index(tag) + 1, image_urls[idx])
+                idx += 1
+                tag.decompose()
+            content = soup.prettify()
+
+        # 2. 요청
         url = "https://www.tistory.com/apis/post/write"
         disclaimer = '''<div id="xsb-disclaimer><hr>원 글 작성일 : {0} <br /></div>"'''.format(write_date)
         param = {'access_token': token, 'output': 'json', 'blogName': blog_name, 'title': title, 'content': content,
                  'visibility': '3', 'published': str(int(time.time()))}
 
-        r = requests.post(url=url, params=param)
+        r = requests.post(url=url, data=param)
         return r.text
 
     def naver_write_article():
@@ -394,4 +459,4 @@ def list_all():
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=12321, debug=False)
+    app.run(host='0.0.0.0', port=12321, debug=True)
