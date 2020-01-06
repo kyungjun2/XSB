@@ -388,6 +388,21 @@ def write_article(args=None):
                 tag.decompose()
             content = soup.prettify()
 
+            # 3. 업로드한 이미지 삭제
+            for file in os.listdir(image_path):
+                os.remove(image_path + file)
+            os.rmdir(image_path)
+            try:
+                post_path = image_path[:image_path.index(image_path.split("\\")[-2])]
+                blog_path = post_path[:post_path.index(post_path.split("\\")[-2])]
+                os.rmdir(post_path)
+                os.rmdir(blog_path)
+            except PermissionError:
+                pass
+            except Exception as e:
+                print(e)
+                print(image_path)
+
         # 2. 요청
         url = "https://www.tistory.com/apis/post/write"
         disclaimer = '''<div id="xsb-disclaimer><hr>원 글 작성일 : {0} <br /></div>"'''.format(write_date)
