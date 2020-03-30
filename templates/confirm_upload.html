@@ -19,22 +19,22 @@
     </style>
 </head>
 <body>
-    <form action="/xsb?stage=4" method="post">
+    <h2>다음 글들을 {{ blog.source }}에서 {{ blog.target }}로 복사합니다. 진행할까요?</h2><br />
+    <sub>진행을 누르면, 이용약관에 동의하는 것으로 간주합니다.</sub><br />
+    <form action="/xsb?stage=5" method="post">
         <table>
             <tr>
                 <th>제목</th>
                 <th>작성일</th>
-                <th>선택</th>
             </tr>
             {% for post in posts %}
                 <tr>
                     <td><a href="{{ post.postLink }}">{{ post.title }}</a></td>
                     <td>{{ post.writeDate }}</td>
-                    <td><input type="checkbox" name='selection[]' value="{{ post.postId }}"></td>
                 </tr>
             {% endfor %}
         </table>
-        <input id="submit-button" type="submit" value="확인">
+        <input id="submit-button" type="submit" value="진행">
     </form>
 </body>
 </html>

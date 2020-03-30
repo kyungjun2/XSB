@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+</head>
+<body>
+<form action="/login" method="GET">
+<input type="text" name="blogName" value="{% if target == "naver" %}네이버{% elif target == "tistory" %}티스토리{% endif %}블로그 아이디 입력" onclick="value=&quot;&quot;">
+<input type="submit" value="로그인">
+<input type="hidden" name="target" value={% if target == "naver" %}"naver"{% else %}"tistory"{% endif %}>
+</form>
+</body>
+</html>
