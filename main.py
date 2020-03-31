@@ -13,7 +13,7 @@ def welcome():
 
 @app.route('/xsb', methods=['GET', 'POST'])
 def main():
-    from flask import session, render_template, request
+    from flask import session, render_template, request, redirect, url_for
     from XSB import XSB, XSBError
 
     xsb = XSB()
@@ -33,44 +33,51 @@ def main():
         except KeyError:
             return render_template('login.html', target='tistory')
 
-    # 2. 어디로 글을 옮길건지 선택
-    if xsb.target is None and request.args.get('target') is None:
-        return render_template('select_target.html')
-    elif xsb.target is None and request.args.get('target') is not None:
-        xsb.target = request.args.get('target')
-    session['xsb'] = xsb.__dict__
+    try:
+        # 3. 최근 글 파싱
+        if request.args.get("stage") is None:
+            if xsb.target == 'naver':
+                recent = xsb.recent_post(target='tistory')
+                return render_template("recent_articles.html", posts=recent)
+            elif xsb.target == 'tistory':
+                recent = xsb.recent_post(target='naver')
+                return render_template("recent_articles.html", posts=recent)
+            else:
+                # 2. 어디로 글을 옮길건지 선택
+                if xsb.target is None and request.args.get('target') is None:
+                    return render_template('select_target.html')
+                elif xsb.target is None and request.args.get('target') is not None:
+                    xsb.target = request.args.get('target')
+                    session['xsb'] = xsb.__dict__
+                    return redirect(url_for('main'))
 
-    # 3. 최근 글 파싱
-    if request.args.get("stage") is None:
-        if xsb.target == 'naver':
-            recent = xsb.recent_post(target='tistory')
-            return render_template("recent_articles.html", posts=recent)
-        elif xsb.target == 'tistory':
-            recent = xsb.recent_post(target='naver')
-            return render_template("recent_articles.html", posts=recent)
+        # 4. 선택된 글 다운로드
+        elif request.args.get("stage") == "4":
+            selected_posts = request.form.getlist('selection[]')
+            xsb.target_posts = selected_posts
+            download_result = xsb.download_post(selected_posts)
+            session['xsb'] = xsb.__dict__
+            return render_template("confirm_upload.html", posts=download_result,
+                                   blog={'source': '티스토리' if xsb.target == 'naver' else '네이버',
+                                         'target': '티스토리' if xsb.target == 'tistory' else '네이버'})
+        # 5. 글 업로드
+        elif request.args.get("stage") == "5":
+            results = xsb.upload_post()
+            return "성공"
+
         else:
-            del session['xsb']
-            return "잘못된 접근입니다."
+            raise XSBError("잘못된 접근입니다.")
 
-    # 4. 선택된 글 다운로드
-    elif request.args.get("stage") == "4":
-        selected_posts = request.form.getlist('selection[]')
-        xsb.target_posts = selected_posts
-        download_result = xsb.download_post(selected_posts)
-        session['xsb'] = xsb.__dict__
-        return render_template("confirm_upload.html", posts=download_result,
-                               blog={'source': '티스토리' if xsb.target == 'naver' else '네이버',
-                                     'target': '티스토리' if xsb.target == 'tistory' else '네이버'})
-    # 5. 글 업로드
-    elif request.args.get("stage") == "5":
-        raise NotImplementedError
+    except XSBError as e:
+        # 오류 발생시 오브젝트 삭제
+        del session['xsb']
+        del session['tistory_name']
+        del session['naver_name']
+        del session['tistory_token']
+        del session['naver_token']
+        del xsb
 
-    else:
-        return "잘못된 접근입니다."
-
-    # 6. 모든 작업이 끝나면 오브젝트 삭제
-    del session['xsb']
-    del xsb
+        return e.message
 
 
 @app.route('/login', methods=['GET'])

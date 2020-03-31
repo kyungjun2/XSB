@@ -6,14 +6,14 @@ class XSBError(BaseException):
 class XSB:
     def __init__(self):
         self.target = None
-        self.credential = {}
-        self.blog_name = {}
+        self.credential = {}   # {블로그(tistory/naver): 토큰}
+        self.blog_name = {}  # {블로그(tistory/naver): 아이디}
 
-        self.target_posts = []
-        self.downloaded_posts = []
+        self.target_posts = []  # [postid,...]
+        self.downloaded_posts = []  # [{'title': 원글제목, 'postUrl': 원글주소, 'writeDate': 원글작성일, 'content': 내용},...]
         self.results = []
 
-    def validate_stage(self, level, posts=None):
+    def validate_stage(self, level):
         # 1단계 - 로그인
         try:
             temp = self.credential['naver']
@@ -214,10 +214,77 @@ class XSB:
             raise XSBError("잘못된 접근입니다.")
 
     def upload_post(self):
+        import time
+        import requests
+        import config
+        import json
+        import platform
+        import os
+        from bs4 import BeautifulSoup as bs
         self.validate_stage(level=5)
+
+
         if self.target == 'naver':
             pass
+
         elif self.target == 'tistory':
-            pass
+            def tistory_write_article(post, postid):
+                # 1. 이미지 업로드 (있으면)
+                url = "https://www.tistory.com/apis/post/attach"
+                param = {'access_token': self.credential['tistory'], 'blogName': self.blog_name['tistory'], 'output': 'json'}
+
+                path = config.file_save_path + "{0}\\{1}\\{2}\\".format(self.target, self.blog_name['tistory'], postid)\
+                    if platform.system() == "Windows" \
+                    else "{0}/{1}/{2}/".format(self.target, self.blog_name['tistory'], postid)
+
+                if os.path.isdir(path):
+                    file_type = json.load(open(path + "images.json", 'r'))
+                    image_urls = []
+
+                    # 1. 이미지 업로드
+                    for img in os.listdir(path):
+                        if img == "images.json":
+                            continue
+                        file = {'uploadedfile': (img, open(path + img, "rb"))}
+                        j = json.loads(requests.post(url=url, params=param, files=file).text)
+                        image_urls.append(j['tistory']['replacer'])
+
+                    # 2. 이미지 링크 교체
+                    soup = bs(post['content'], "html.parser")
+                    idx = 0
+
+                    for tag in soup.find_all("img"):
+                        tag.parent.insert(tag.parent.index(tag) + 1, image_urls[idx])
+                        idx += 1
+                        tag.decompose()
+                    content = soup.prettify()
+
+                    # 3. 업로드한 이미지 삭제
+                    for file in os.listdir(path):
+                        os.remove(path + file)
+                    os.rmdir(path)
+                    try:
+                        post_path = path[:path.index(path.split("\\")[-2])]
+                        blog_path = post_path[:post_path.index(post_path.split("\\")[-2])]
+                        os.rmdir(post_path)
+                        os.rmdir(blog_path)
+                    except Exception as e:
+                        print(e)
+                        print(path)
+
+                # 2. 요청
+                url = "https://www.tistory.com/apis/post/write"
+                disclaimer = '''<div id="xsb-disclaimer><hr>원 글 작성일 : {0} <br /></div>"'''.format(post['writeDate'])
+                param = {'access_token': self.credential['tistory'], 'output': 'json', 'blogName': self.blog_name['tistory'],
+                         'title': post['title'],
+                         'content': post['content'],
+                         'visibility': '3', 'published': str(int(time.time()))}
+
+                r = requests.post(url=url, data=param)
+                return r.text
+
+            for post in self.downloaded_posts:
+                postid = post['postUrl'][post['postUrl'].index(post['postUrl'].split('=')[-1]):]
+                print(tistory_write_article(post, postid))
         else:
             raise XSBError("잘못된 접근입니다.")
