@@ -220,12 +220,31 @@ class XSB:
         import json
         import platform
         import os
+        import keys
         from bs4 import BeautifulSoup as bs
         self.validate_stage(level=5)
 
 
         if self.target == 'naver':
-            pass
+            def naver_write_article(post, postid):
+                # 1. 사진 업로드
+
+                # ????
+
+                # 2. 요청
+                url = "	https://openapi.naver.com/blog/writePost.json"
+                disclaimer = '''<div id="xsb-disclaimer><p>원 글 작성일 : {0} <br /></p></div>"'''.format(post['writeDate'])
+                param = {'title': post['title'], 'contents': post['content']}
+
+                header = {'Authorization': "Bearer " + self.credential['naver'], 'X-Naver-Client-Id': keys.naver_app_id,
+                          'X-Naver-Client-Secret': keys.naver_secret}
+
+                r = requests.post(url=url, data=param, headers=header)
+                return r.text
+
+            for post in self.downloaded_posts:
+                postid = post['postUrl'][post['postUrl'].index(post['postUrl'].split('=')[-1]):]
+                print(naver_write_article(post, postid))
 
         elif self.target == 'tistory':
             def tistory_write_article(post, postid):
@@ -241,7 +260,7 @@ class XSB:
                     file_type = json.load(open(path + "images.json", 'r'))
                     image_urls = []
 
-                    # 1. 이미지 업로드
+                    # 1-1. 이미지 업로드
                     for img in os.listdir(path):
                         if img == "images.json":
                             continue
@@ -249,7 +268,7 @@ class XSB:
                         j = json.loads(requests.post(url=url, params=param, files=file).text)
                         image_urls.append(j['tistory']['replacer'])
 
-                    # 2. 이미지 링크 교체
+                    # 1-2. 이미지 링크 교체
                     soup = bs(post['content'], "html.parser")
                     idx = 0
 
@@ -259,7 +278,7 @@ class XSB:
                         tag.decompose()
                     content = soup.prettify()
 
-                    # 3. 업로드한 이미지 삭제
+                    # 1-3. 업로드한 이미지 삭제
                     for file in os.listdir(path):
                         os.remove(path + file)
                     os.rmdir(path)
