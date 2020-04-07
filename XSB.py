@@ -92,7 +92,6 @@ class XSB:
         import json
         import requests
         from bs4 import BeautifulSoup as bs
-        import re
         import config
         import platform
         from pathlib import Path
@@ -106,45 +105,39 @@ class XSB:
                          'postId': postid, 'output': 'json'}
                 j = json.loads(requests.get(url=url, params=param).text)
 
-                # 2. 파싱
-                # 2-1. 이미지 다운로드
-                r = re.compile("""\[##_Image\|kage@([a-zA-Z0-9/.]+).+_##\]""")
-                r2 = re.compile("""(\[##_Image\|kage@[a-zA-Z0-9/.]+.+_##\])""")
+                # 2. 이미지 다운로드
                 content = j['tistory']['item']['content']
 
-                img_urls = []
-                idx = 0
-                image_data = {}
-
-                path = config.file_save_path + "{0}\\{1}\\{2}\\".format(self.target, self.blog_name['tistory'], postid)\
+                path = config.file_save_path + "{0}\\{1}\\{2}\\".format('tistory', self.blog_name['tistory'], postid)\
                     if platform.system() == "Windows" \
-                    else "{0}/{1}/{2}/".format(self.target, self.blog_name['tistory'], postid)
+                    else "{0}/{1}/{2}/".format('tistory', self.blog_name['tistory'], postid)
                 Path(path).mkdir(parents=True, exist_ok=True)
 
-                for img in r.findall(content):
-                    req = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
-                    open(path + str(idx) + "." + img.split('.')[-1], 'wb').write(req.content)
-
-                    img_urls.append("https://k.kakaocdn.net/dn/" + img)
-                    image_data[str(idx) + "." + url.split('.')[-1]] = req.headers['content-type']
-                    img_urls.append(url)
-                    idx += 1
-                with open(path + 'images.json', 'w') as file:
-                    json.dump(image_data, file)
-
-                # 2-2. 링크 교체
-                content = r2.sub("""<img src="">""", content)
-                soup = bs(content, 'html.parser')
                 idx = 0
+                image_data = {}
+                soup = bs(content, 'html.parser')
                 for img in soup.find_all("img"):
-                    img.attrs['source'] = img_urls[idx]
+                    img = img.attrs['src']
+                    try:
+                        img = img.split("kage@")[1]
+                        req = requests.get("https://k.kakaocdn.net/dn/" + img, allow_redirects=True)
+                    except IndexError:
+                        req = requests.get(img, allow_redirects=True)
+                        req.url = req.url.split('?')[-1]
+
+                    with open(path + str(idx) + "." + req.url.split('.')[-1], 'wb') as fs:
+                        fs.write(req.content)
+                        fs.close()
+                    image_data[str(idx) + "." + req.url.split('.')[-1]] = req.headers['content-type']
                     idx += 1
+
+                with open(path + 'images.json', 'w') as file:
+                    json.dump({"images": image_data}, file)
+                    file.close()
 
                 # 3. 결과 리턴
                 ret = {'title': j['tistory']['item']['title'], 'content': content,
                        'writeDate': j['tistory']['item']['date'], 'postUrl': j['tistory']['item']['postUrl']}
-                if len(img_urls) != 0:
-                    ret['image_path'] = path
                 return ret
 
             results = []
@@ -182,27 +175,28 @@ class XSB:
                 image_data = {}
 
                 soup = bs(content, "html.parser")
-                path = config.file_save_path + "{0}\\{1}\\{2}\\".format(self.target, self.blog_name['naver'], postid) \
+                path = config.file_save_path + "{0}\\{1}\\{2}\\".format('naver', self.blog_name['naver'], postid) \
                     if platform.system() == "Windows" \
-                    else "{0}/{1}/{2}/".format(self.target, self.blog_name['naver'], postid)
+                    else "{0}/{1}/{2}/".format('naver', self.blog_name['naver'], postid)
                 Path(path).mkdir(parents=True, exist_ok=True)
 
                 for img in soup.find_all("img"):
                     url = img.attrs['src'] if img.attrs['src'] is not None else img.attrs['data-lazy-src']
                     url = url.split('?type')[0]
                     req = requests.get(url + ("?type=w1" if url.count("postfiles") != 0 else ""), allow_redirects=True)
-                    open(path + str(idx) + "." + url.split('.')[-1], 'wb').write(req.content)
+                    with open(path + str(idx) + "." + url.split('.')[-1], 'wb') as fs:
+                        fs.write(req.content)
+                        fs.close()
 
-                    image_data[str(idx) + "." + url.split('.')[-1]] = req.headers['content-type']
+                    image_data[str(idx) + "." + req.url.split('.')[-1]] = req.headers['content-type']
                     img_urls.append(url)
                     idx += 1
                 with open(path + 'images.json', 'w') as file:
-                    json.dump(image_data, file)
+                    json.dump({"images": image_data}, file)
+                    file.close()
 
                 # 3. 결과 리턴
                 ret = {'title': title, 'content': content, 'writeDate': writeDate, 'postUrl': url}
-                if len(img_urls) != 0:
-                    ret['image_path'] = path
                 return ret
 
             results = []
@@ -227,23 +221,57 @@ class XSB:
 
         if self.target == 'naver':
             def naver_write_article(post, postid):
-                # 1. 사진 업로드
+                # 1. 업로드 해야하는 사진이 있는지 확인
+                path = config.file_save_path + "{0}\\{1}\\{2}\\".format('tistory', self.blog_name['tistory'], postid)\
+                    if platform.system() == "Windows" \
+                    else "{0}/{1}/{2}/".format('tistory', self.blog_name['tistory'], postid)
+                files = []
 
-                # ????
+                with open(path + "images.json", 'r') as fs:
+                    file_type = json.load(fs)
+                    fs.close()
+                if len(file_type['images']) != 0:
+                    # 1-1. 이미지 준비
+                    for img in os.listdir(path):
+                        if img == "images.json":
+                            continue
+                        files.append(('image', (img, open(path + img, "rb"), file_type['images'][img])))
+
+                    # 1-2. 이미지 링크 교체
+                    soup = bs(post['content'], 'html.parser')
+                    idx = 0
+                    for img in soup.find_all("img"):
+                        img.attrs['src'] = f"#{idx}"
+                        idx += 1
+                    post['content'] = soup.prettify()
 
                 # 2. 요청
                 url = "	https://openapi.naver.com/blog/writePost.json"
                 disclaimer = '''<div id="xsb-disclaimer><p>원 글 작성일 : {0} <br /></p></div>"'''.format(post['writeDate'])
-                param = {'title': post['title'], 'contents': post['content']}
+                param = {'title': post['title'], 'contents': post['content'], }
 
                 header = {'Authorization': "Bearer " + self.credential['naver'], 'X-Naver-Client-Id': keys.naver_app_id,
                           'X-Naver-Client-Secret': keys.naver_secret}
 
-                r = requests.post(url=url, data=param, headers=header)
+                if len(files) == 0:
+                    r = requests.post(url=url, data=param, headers=header)
+                else:
+                    print(files)
+                    r = requests.post(url=url, data=param, headers=header, files=files)
+                    print(r.request)
+
+                # 1-3. 업로드한 이미지 삭제
+                for file in files:
+                    fs = file[1][1]
+                    fs.close()
+
+                for file in os.listdir(path):
+                    os.remove(path + file)
+                os.rmdir(path)
                 return r.text
 
             for post in self.downloaded_posts:
-                postid = post['postUrl'][post['postUrl'].index(post['postUrl'].split('=')[-1]):]
+                postid = post['postUrl'][post['postUrl'].index(post['postUrl'].split('/')[-1]):]
                 print(naver_write_article(post, postid))
 
         elif self.target == 'tistory':
@@ -252,21 +280,25 @@ class XSB:
                 url = "https://www.tistory.com/apis/post/attach"
                 param = {'access_token': self.credential['tistory'], 'blogName': self.blog_name['tistory'], 'output': 'json'}
 
-                path = config.file_save_path + "{0}\\{1}\\{2}\\".format(self.target, self.blog_name['tistory'], postid)\
+                path = config.file_save_path + "{0}\\{1}\\{2}\\".format('naver', self.blog_name['naver'], postid)\
                     if platform.system() == "Windows" \
-                    else "{0}/{1}/{2}/".format(self.target, self.blog_name['tistory'], postid)
+                    else "{0}/{1}/{2}/".format('naver', self.blog_name['naver'], postid)
 
-                if os.path.isdir(path):
-                    file_type = json.load(open(path + "images.json", 'r'))
+                with open(path + "images.json", 'r') as fs:
+                    file_type = json.load(fs)
+                    fs.close()
+                if len(file_type['images']) != 0:
                     image_urls = []
 
                     # 1-1. 이미지 업로드
                     for img in os.listdir(path):
                         if img == "images.json":
                             continue
+
                         file = {'uploadedfile': (img, open(path + img, "rb"))}
                         j = json.loads(requests.post(url=url, params=param, files=file).text)
                         image_urls.append(j['tistory']['replacer'])
+                        file['uploadedfile'][1].close()
 
                     # 1-2. 이미지 링크 교체
                     soup = bs(post['content'], "html.parser")
@@ -276,20 +308,12 @@ class XSB:
                         tag.parent.insert(tag.parent.index(tag) + 1, image_urls[idx])
                         idx += 1
                         tag.decompose()
-                    content = soup.prettify()
+                    post['content'] = soup.prettify()
 
                     # 1-3. 업로드한 이미지 삭제
                     for file in os.listdir(path):
                         os.remove(path + file)
                     os.rmdir(path)
-                    try:
-                        post_path = path[:path.index(path.split("\\")[-2])]
-                        blog_path = post_path[:post_path.index(post_path.split("\\")[-2])]
-                        os.rmdir(post_path)
-                        os.rmdir(blog_path)
-                    except Exception as e:
-                        print(e)
-                        print(path)
 
                 # 2. 요청
                 url = "https://www.tistory.com/apis/post/write"

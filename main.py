@@ -3,6 +3,7 @@ import os
 
 app = Flask(__name__)
 app.secret_key = os.urandom(16)
+clients = {}
 
 
 @app.route('/')
@@ -19,7 +20,7 @@ def main():
     xsb = XSB()
     try:
         # 이전에 만들어둔 값이 있으면 로그인 과정 무시
-        xsb.__dict__ = session['xsb']
+        xsb.__dict__ = clients[session['xsb']]
     except KeyError:
         # 1. 로그인
         try:
@@ -32,6 +33,14 @@ def main():
             xsb.blog_name['tistory'] = session['tistory_name']
         except KeyError:
             return render_template('login.html', target='tistory')
+
+        while True:
+            session['xsb'] = os.urandom(16)
+            if session['xsb'] not in clients.keys():
+                clients[session['xsb']] = xsb.__dict__
+                break
+            else:
+                continue
 
     try:
         # 3. 최근 글 파싱
@@ -48,7 +57,7 @@ def main():
                     return render_template('select_target.html')
                 elif xsb.target is None and request.args.get('target') is not None:
                     xsb.target = request.args.get('target')
-                    session['xsb'] = xsb.__dict__
+                    clients[session['xsb']] = xsb.__dict__
                     return redirect(url_for('main'))
 
         # 4. 선택된 글 다운로드
@@ -56,7 +65,7 @@ def main():
             selected_posts = request.form.getlist('selection[]')
             xsb.target_posts = selected_posts
             download_result = xsb.download_post(selected_posts)
-            session['xsb'] = xsb.__dict__
+            clients[session['xsb']] = xsb.__dict__
             return render_template("confirm_upload.html", posts=download_result,
                                    blog={'source': '티스토리' if xsb.target == 'naver' else '네이버',
                                          'target': '티스토리' if xsb.target == 'tistory' else '네이버'})
@@ -76,6 +85,7 @@ def main():
         del session['tistory_token']
         del session['naver_token']
         del xsb
+        del clients[session['xsb']]
 
         return e.message
 
