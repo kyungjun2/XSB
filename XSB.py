@@ -218,7 +218,6 @@ class XSB:
         from bs4 import BeautifulSoup as bs
         self.validate_stage(level=5)
 
-
         if self.target == 'naver':
             def naver_write_article(post, postid):
                 # 1. 업로드 해야하는 사진이 있는지 확인
@@ -256,9 +255,7 @@ class XSB:
                 if len(files) == 0:
                     r = requests.post(url=url, data=param, headers=header)
                 else:
-                    print(files)
                     r = requests.post(url=url, data=param, headers=header, files=files)
-                    print(r.request)
 
                 # 1-3. 업로드한 이미지 삭제
                 for file in files:
