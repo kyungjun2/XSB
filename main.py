@@ -17,6 +17,15 @@ def main():
     from flask import session, render_template, request, redirect, url_for
     from XSB import XSB, XSBError
 
+    def cleardata():
+        del session['xsb']
+        del session['tistory_name']
+        del session['naver_name']
+        del session['tistory_token']
+        del session['naver_token']
+        del xsb
+        del clients[session['xsb']]
+
     xsb = XSB()
     try:
         # 이전에 만들어둔 값이 있으면 로그인 과정 무시
@@ -72,6 +81,8 @@ def main():
         # 5. 글 업로드
         elif request.args.get("stage") == "5":
             results = xsb.upload_post()
+            print(results)
+            cleardata()
             return "성공"
 
         else:
@@ -79,13 +90,7 @@ def main():
 
     except XSBError as e:
         # 오류 발생시 오브젝트 삭제
-        del session['xsb']
-        del session['tistory_name']
-        del session['naver_name']
-        del session['tistory_token']
-        del session['naver_token']
-        del xsb
-        del clients[session['xsb']]
+        cleardata()
 
         return e.message
 
